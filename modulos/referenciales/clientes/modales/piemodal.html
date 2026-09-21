@@ -1,0 +1,16 @@
+<div class="form-group">
+  <div class="col-md-12 text-center">
+    <button title="Cerrar modal" type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+    <button title="Guardar nuevo registro" type="submit" class="btn btn-primary">Registrar</button>
+    <button title="Cancelar modificar y cerrar modal" type="reset" style="display: none;" class="btn btn-danger btncancelar" data-bs-dismiss="modal">Cancelar</button>
+  </div>
+</div>
+<script>
+  $(document).ready(function (){
+    $("button:reset").on("click",function (){
+      let btn=$(this);
+      btn.hide();
+      btn.closest("form").trigger("reset");
+    });
+  });
+</script>
