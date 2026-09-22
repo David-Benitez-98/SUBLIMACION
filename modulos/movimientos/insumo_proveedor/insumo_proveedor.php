@@ -105,7 +105,7 @@ if (!$insumo) {
 </main>
 
 <?php
-$stProveedor = $conexion->query("SELECT id_proveedor, codigo, nombre FROM proveedores WHERE activo = true ORDER BY nombre ASC");
+$stProveedor = $conexion->query("SELECT id_proveedor, ruc, razon_social FROM proveedores WHERE activo = true ORDER BY razon_social ASC");
 $proveedoresDisponibles = $stProveedor->fetchAll(PDO::FETCH_ASSOC);
 
 include RUTA_PROYECTO . '/modulos/movimientos/insumo_proveedor/modales/modal_insumo_proveedor.php';
@@ -134,4 +134,3 @@ include RUTA_PROYECTO . '/modulos/movimientos/insumo_proveedor/modales/modal_ins
 <?php include_once RUTA_PROYECTO . '/portada/footer.php' ?>
 
 </html>
-

@@ -26,7 +26,9 @@ foreach ($insumos as &$i) {
         $icono = $i['activo'] ? 'fa-times' : 'fa-check';
         $i['stock_actual'] = (int) $i['stock_actual'];
         $i['stock_minimo'] = (int) $i['stock_minimo'];
-        $i['acciones'] = '<button class="btn btn-sm btn-outline-secondary btn-editar" data-id="' . $i['id_insumo'] . '"><i class="fas fa-edit"></i></button> '
+        $urlProveedores = BASE_URL . '/modulos/movimientos/insumo_proveedor/insumo_proveedor.php?id_insumo=' . $i['id_insumo'];
+        $i['acciones'] = '<a href="' . $urlProveedores . '" class="btn btn-sm btn-outline-primary" title="Proveedores del insumo"><i class="fas fa-truck"></i></a> '
+                . '<button class="btn btn-sm btn-outline-secondary btn-editar" data-id="' . $i['id_insumo'] . '"><i class="fas fa-edit"></i></button> '
                 . '<button class="btn btn-sm ' . $claseBtn . ' btn-cambiar-estado" data-id="' . $i['id_insumo'] . '" data-nombre="' . $nombreCompleto . '"><i class="fas ' . $icono . '"></i> ' . $estadoTexto . '</button>';
 }
 

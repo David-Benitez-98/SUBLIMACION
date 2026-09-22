@@ -18,17 +18,17 @@ $etiquetasCalidad = [1 => 'Baja', 2 => 'Media', 3 => 'Alta', 4 => 'Premium'];
 
 $sql = "SELECT ip.id_insumo_proveedor, ip.id_proveedor, ip.precio, ip.calidad, ip.fecha_cotizacion,
                ip.tiempo_entrega, ip.favorito, ip.activo,
-               p.codigo AS codigo_proveedor, p.nombre AS nombre_proveedor
+               p.ruc AS ruc_proveedor, p.razon_social AS nombre_proveedor
         FROM insumo_proveedor ip
         INNER JOIN proveedores p ON p.id_proveedor = ip.id_proveedor
         WHERE ip.id_insumo = :id_insumo
-        ORDER BY ip.favorito DESC, p.nombre ASC";
+        ORDER BY ip.favorito DESC, p.razon_social ASC";
 $st = $conexion->prepare($sql);
 $st->execute(['id_insumo' => $idInsumo]);
 $relaciones = $st->fetchAll(PDO::FETCH_ASSOC);
 
 foreach ($relaciones as &$r) {
-    $nombreProveedor = htmlspecialchars($r['codigo_proveedor'] . ' - ' . $r['nombre_proveedor']);
+    $nombreProveedor = htmlspecialchars($r['nombre_proveedor'] . ($r['ruc_proveedor'] ? ' (' . $r['ruc_proveedor'] . ')' : ''));
 
     // Valores originales, sin formatear (van en los data-* para precargar el form al editar)
     $precioOriginal = $r['precio'];

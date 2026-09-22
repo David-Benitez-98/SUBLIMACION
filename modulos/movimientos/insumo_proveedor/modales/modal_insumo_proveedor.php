@@ -18,7 +18,7 @@
                             <option value="">Seleccione...</option>
                             <?php foreach ($proveedoresDisponibles as $prov): ?>
                                 <option value="<?php echo $prov['id_proveedor']; ?>">
-                                    <?php echo htmlspecialchars($prov['codigo'] . ' - ' . $prov['nombre']); ?>
+                                    <?php echo htmlspecialchars($prov['razon_social'] . ($prov['ruc'] ? ' (' . $prov['ruc'] . ')' : '')); ?>
                                 </option>
                             <?php endforeach; ?>
                         </select>
