@@ -88,6 +88,7 @@ if (!$insumo) {
                                 <th>#</th>
                                 <th>Proveedor</th>
                                 <th>Precio</th>
+                                <th>Fecha Cotización</th>
                                 <th>Calidad</th>
                                 <th>Entrega</th>
                                 <th>Favorito</th>

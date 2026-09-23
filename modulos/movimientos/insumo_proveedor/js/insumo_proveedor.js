@@ -26,6 +26,7 @@ $(document).ready(function () {
       { data: "id_insumo_proveedor" },
       { data: "nombre_proveedor" },
       { data: "precio" },
+      { data: "fecha_cotizacion", defaultContent: "-" },
       { data: "calidad", defaultContent: "-" },
       { data: "tiempo_entrega", defaultContent: "-" },
       { data: "favorito", defaultContent: "" },
@@ -57,7 +58,7 @@ $(document).ready(function () {
     var $form = $("#form_insumo_proveedor");
     $form.find('input[name="id_insumo_proveedor"]').val(id);
     $("#select_proveedor").val(idProveedor).trigger("change");
-    $("#input_precio").val(precio);
+    $("#input_precio").val(parseFloat(precio));
     $("#select_calidad").val(calidad || "");
     $("#input_fecha_cotizacion").val(fecha);
     $("#input_tiempo_entrega").val(entrega);

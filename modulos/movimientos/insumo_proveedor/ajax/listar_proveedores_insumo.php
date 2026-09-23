@@ -37,7 +37,13 @@ foreach ($relaciones as &$r) {
     $favoritoOriginal = $r['favorito'];
 
     // Valores formateados, solo para mostrar en la tabla
-    $precioFormateado = 'Gs. ' . number_format((float) $precioOriginal, 2, ',', '.');
+    $precioSinCeros = rtrim(rtrim(number_format((float) $precioOriginal, 2, '.', ''), '0'), '.');
+    $precioFormateado = 'Gs. ' . number_format((float) $precioSinCeros, 0, '', '.');
+    if (strpos($precioSinCeros, '.') !== false) {
+        // Si quedaron centavos reales (ej: 25.50), los mostramos aparte
+        $partes = explode('.', $precioSinCeros);
+        $precioFormateado = 'Gs. ' . number_format((float) $partes[0], 0, '', '.') . ',' . $partes[1];
+    }
     $calidadTexto = $calidadOriginal !== null ? ($etiquetasCalidad[(int) $calidadOriginal] ?? '-') : '-';
     $entregaTexto = $entregaOriginal !== null ? $entregaOriginal . ' día(s)' : '-';
     $favoritoTexto = $favoritoOriginal ? '<i class="fas fa-star text-warning"></i>' : '';
