@@ -33,6 +33,7 @@ foreach ($compras as &$c) {
         : ' <button class="btn btn-sm btn-outline-danger btn-anular" data-id="' . $c['id_compra'] . '" data-numero="' . $c['numero_compra'] . '"><i class="fas fa-ban"></i> Anular</button>';
 
     $c['acciones'] = '<button class="btn btn-sm btn-outline-secondary btn-ver-detalle" data-id="' . $c['id_compra'] . '"><i class="fas fa-eye"></i> Ver</button>'
+        . ' <a href="' . BASE_URL . '/reportes/compras/reporte_compra.php?id_compra=' . $c['id_compra'] . '" target="_blank" class="btn btn-sm btn-outline-primary" title="Imprimir reporte"><i class="fas fa-print"></i></a>'
         . $btnAnular;
 }
 
