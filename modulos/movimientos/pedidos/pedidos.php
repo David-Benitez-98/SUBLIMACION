@@ -82,6 +82,7 @@ exigirAcceso($conexion, '/modulos/movimientos/pedidos/pedidos.php');
                                 <th>Total</th>
                                 <th>Saldo</th>
                                 <th>Estado</th>
+                                <th>Faltantes</th>
                                 <th><i class="fas fa-ellipsis-h"></i></th>
                             </tr>
                         </thead>

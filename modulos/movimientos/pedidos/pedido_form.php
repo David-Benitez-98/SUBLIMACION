@@ -132,6 +132,10 @@ $productosDisponibles = $stProducto->fetchAll(PDO::FETCH_ASSOC);
                                 </label>
                             </div>
                         </div>
+                        <div id="aviso_faltantes" class="alert alert-danger" style="display:none;">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            Hay insumos faltantes (ver <strong>Materiales Necesarios</strong> más abajo). No se puede pasar a <strong>En Producción</strong> hasta registrar la compra.
+                        </div>
                         <div class="row">
                             <div class="col-md-3 mb-3">
                                 <label class="form-label">Entrega Estimada</label>
@@ -206,6 +210,11 @@ $productosDisponibles = $stProducto->fetchAll(PDO::FETCH_ASSOC);
 
                         <div class="mt-4">
                             <a href="pedidos.php" class="btn btn-secondary">Volver</a>
+                            <?php if ($esEdicion): ?>
+                                <a href="<?php echo BASE_URL; ?>/reportes/pedidos/imprimir_pedido.php?id_pedido=<?php echo $idPedido; ?>" target="_blank" class="btn btn-outline-dark">
+                                    <i class="fas fa-print"></i> Imprimir
+                                </a>
+                            <?php endif; ?>
                             <button type="submit" class="btn btn-primary" id="btnGuardarPedido">
                                 <i class="fas fa-save"></i> Guardar Pedido
                             </button>
@@ -215,19 +224,20 @@ $productosDisponibles = $stProducto->fetchAll(PDO::FETCH_ASSOC);
                     <?php if ($esEdicion): ?>
                         <hr class="mt-4">
                         <h6><i class="fas fa-boxes"></i> Materiales Necesarios</h6>
-                        <p class="text-muted small">Estimado según la receta de cada producto (producto_insumo). No descuenta stock, es solo informativo.</p>
+                        <p class="text-muted small">Según la receta de cada producto (producto_insumo) y las líneas <strong>ya guardadas</strong>. El stock se descuenta recién al pasar a En Producción; en Confirmado es solo informativo.</p>
                         <table class="table table-sm" id="tbl_materiales_necesarios">
                             <thead>
                                 <tr>
                                     <th>Insumo</th>
                                     <th>Unidad</th>
                                     <th>Necesario</th>
+                                    <th>Ya descontado</th>
                                     <th>Stock Actual</th>
                                     <th>Faltante</th>
                                 </tr>
                             </thead>
                             <tbody id="materiales_necesarios_body">
-                                <tr><td colspan="5" class="text-center text-muted">Cargando...</td></tr>
+                                <tr><td colspan="6" class="text-center text-muted">Cargando...</td></tr>
                             </tbody>
                         </table>
                     <?php endif; ?>

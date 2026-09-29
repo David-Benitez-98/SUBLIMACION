@@ -23,7 +23,16 @@ $idUsuario           = $_SESSION['id_usuario'] ?? null;
 // Orden de avance normal. 'cancelado' se maneja aparte (se puede llegar desde cualquiera, menos desde sí mismo).
 $ordenEstados = ['presupuestado', 'confirmado', 'en_produccion', 'listo', 'entregado'];
 // Estados en los que el pedido "compromete" stock real.
-$estadosQueConsumen = ['confirmado', 'en_produccion', 'listo', 'entregado'];
+// 'confirmado' NO descuenta: ahí solo se informan los faltantes. El stock se descuenta al pasar a producción.
+$estadosQueConsumen = ['en_produccion', 'listo', 'entregado'];
+$etiquetasEstado = [
+    'presupuestado' => 'Presupuestado',
+    'confirmado'    => 'Confirmado',
+    'en_produccion' => 'En Producción',
+    'listo'         => 'Listo',
+    'entregado'     => 'Entregado',
+    'cancelado'     => 'Cancelado',
+];
 
 $json = ['msg' => 'ERROR', 'type' => 'error', 'texto' => 'No se pudo guardar el pedido'];
 
@@ -267,9 +276,15 @@ try {
                 ? $stockAnterior + $cantidadMovimiento
                 : $stockAnterior - $cantidadMovimiento;
 
-            $motivo = $estado === 'cancelado'
-                ? "Reversión por cancelación pedido $numeroPedido"
-                : "Consumo pedido $numeroPedido (ajuste)";
+            if ($estado === 'cancelado') {
+                $motivo = "Reversión por cancelación pedido $numeroPedido";
+            } elseif ($tipoMovimiento === 'entrada') {
+                $motivo = "Devolución de insumos por ajuste del pedido $numeroPedido";
+            } elseif (!in_array($estadoAnterior, $estadosQueConsumen, true)) {
+                $motivo = "Consumo pedido $numeroPedido (inicio de producción)";
+            } else {
+                $motivo = "Consumo pedido $numeroPedido (ajuste)";
+            }
 
             $movimientosPendientes[] = [
                 'id_insumo'      => $idInsumo,
@@ -284,7 +299,15 @@ try {
         }
 
         if (count($insumosFaltantes) > 0) {
-            throw new Exception('No hay stock suficiente: ' . implode('; ', $insumosFaltantes) . '. Registrá la compra y volvé a intentar.');
+            $pasaAConsumir = in_array($estado, $estadosQueConsumen, true)
+                && !in_array($estadoAnterior, $estadosQueConsumen, true);
+
+            if ($pasaAConsumir) {
+                throw new Exception('No se puede pasar a "' . $etiquetasEstado[$estado] . '" porque faltan insumos: '
+                    . implode('; ', $insumosFaltantes) . '. Registrá la compra y volvé a intentar.');
+            }
+            throw new Exception('No hay stock suficiente para los cambios del pedido: '
+                . implode('; ', $insumosFaltantes) . '. Registrá la compra y volvé a intentar.');
         }
 
         foreach ($movimientosPendientes as $movimiento) {

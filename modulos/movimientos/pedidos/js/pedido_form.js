@@ -1,6 +1,19 @@
 $(document).ready(function () {
   const DELAY_NOTIFICACION = 3000;
 
+  // Quitar/agregar líneas solo cambia la pantalla: se aplica en la base recién al presionar "Guardar Pedido".
+  // Este flag avisa si intentan salir de la página con cambios pendientes.
+  var hayCambiosSinGuardar = false;
+  window.addEventListener("beforeunload", function (e) {
+    if (hayCambiosSinGuardar) {
+      e.preventDefault();
+      e.returnValue = "";
+    }
+  });
+  $("#form_pedido").on("input change", function () {
+    hayCambiosSinGuardar = true;
+  });
+
   // Fecha de hoy por defecto (solo si es un pedido nuevo)
   if (!ES_EDICION) {
     var hoy = new Date();
@@ -57,6 +70,7 @@ $(document).ready(function () {
 
   $("#btnAgregarLinea").on("click", function () {
     agregarFila();
+    hayCambiosSinGuardar = true;
   });
 
   // ====== Inicializar filas ya existentes (modo edición) o arrancar con una vacía (modo nuevo) ======
@@ -89,7 +103,8 @@ $(document).ready(function () {
 
   // ====== Restricciones de estado al editar (solo avanzar, o cancelar) ======
   const ORDEN_ESTADOS = ["presupuestado", "confirmado", "en_produccion", "listo", "entregado"];
-  const ESTADOS_QUE_CONSUMEN = ["confirmado", "en_produccion", "listo", "entregado"];
+  // 'confirmado' no descuenta stock: el descuento ocurre al pasar a producción
+  const ESTADOS_QUE_CONSUMEN = ["en_produccion", "listo", "entregado"];
 
   if (ES_EDICION && ESTADO_ANTERIOR) {
     if (ESTADO_ANTERIOR === "cancelado") {
@@ -120,8 +135,8 @@ $(document).ready(function () {
       ESTADOS_QUE_CONSUMEN.indexOf(ESTADO_ANTERIOR) !== -1;
 
     if (aplica) {
-      // Por defecto se repone si venía de confirmado/en_produccion; NO si venía de listo/entregado
-      var reponerPorDefecto = ESTADO_ANTERIOR === "confirmado" || ESTADO_ANTERIOR === "en_produccion";
+      // Por defecto se repone si venía de en_produccion; NO si venía de listo/entregado
+      var reponerPorDefecto = ESTADO_ANTERIOR === "en_produccion";
       if ($("#bloque_reponer_stock").is(":hidden")) {
         $("#check_reponer_stock").prop("checked", reponerPorDefecto);
       }
@@ -157,6 +172,14 @@ $(document).ready(function () {
     }
     $(this).closest(".fila-detalle").remove();
     recalcularTotal();
+    hayCambiosSinGuardar = true;
+    PNotify.notice({
+      title: "Línea quitada",
+      text: "El cambio se aplica al presionar «Guardar Pedido»",
+      type: "info",
+      delay: DELAY_NOTIFICACION,
+      styling: "brighttheme",
+    });
   });
 
   // ====== Cargar el panel de materiales necesarios (solo en edición) ======
@@ -172,24 +195,34 @@ $(document).ready(function () {
       success: function (res) {
         var $body = $("#materiales_necesarios_body").empty();
         if (!res.materiales || res.materiales.length === 0) {
-          $body.append('<tr><td colspan="5" class="text-center text-muted">Los productos de este pedido no tienen insumos cargados en su receta (producto_insumo)</td></tr>');
+          $body.append('<tr><td colspan="6" class="text-center text-muted">Los productos de este pedido no tienen insumos cargados en su receta (producto_insumo)</td></tr>');
           return;
         }
+        var hayFaltantes = false;
         res.materiales.forEach(function (m) {
+          if (m.faltante > 0) {
+            hayFaltantes = true;
+          }
           var claseFila = m.faltante > 0 ? "table-danger" : "";
           $body.append(
             "<tr class='" + claseFila + "'>" +
               "<td>" + m.nombre_insumo + "</td>" +
               "<td>" + m.nombre_unidad + "</td>" +
               "<td>" + m.necesario + "</td>" +
+              "<td>" + m.ya_descontado + "</td>" +
               "<td>" + m.stock_actual + "</td>" +
               "<td>" + (m.faltante > 0 ? m.faltante : "-") + "</td>" +
               "</tr>"
           );
         });
+
+        // Antes de producción: avisar si faltan insumos (el guardado va a bloquear el avance)
+        if (hayFaltantes && (ESTADO_ANTERIOR === "presupuestado" || ESTADO_ANTERIOR === "confirmado")) {
+          $("#aviso_faltantes").show();
+        }
       },
       error: function () {
-        $("#materiales_necesarios_body").html('<tr><td colspan="5" class="text-center text-danger">Error al calcular los materiales necesarios</td></tr>');
+        $("#materiales_necesarios_body").html('<tr><td colspan="6" class="text-center text-danger">Error al calcular los materiales necesarios</td></tr>');
       },
     });
   }
@@ -257,6 +290,7 @@ $(document).ready(function () {
       dataType: "json",
       success: function (res) {
         if (res.msg === "CORRECTO") {
+          hayCambiosSinGuardar = false;
           PNotify.notice({
             title: "Éxito",
             text: res.texto,

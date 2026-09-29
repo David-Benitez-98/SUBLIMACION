@@ -48,6 +48,7 @@ $(document).ready(function () {
       { data: "total" },
       { data: "saldo" },
       { data: "estado" },
+      { data: "faltantes" },
       { data: "acciones", orderable: false, searchable: false },
     ],
     order: [], // el orden ya viene resuelto del backend (por fecha de entrega)

@@ -36,16 +36,32 @@ $st = $conexion->prepare($sql);
 $st->execute(['id_pedido' => $idPedido]);
 $filas = $st->fetchAll(PDO::FETCH_ASSOC);
 
+// Neto ya descontado de stock para este pedido (salidas - entradas de reversión).
+// Así, una vez en producción, lo que ya se descontó no se cuenta como faltante.
+$stConsumido = $conexion->prepare("SELECT id_insumo,
+                                          SUM(CASE WHEN tipo = 'salida' THEN cantidad ELSE -cantidad END) AS neto
+                                   FROM movimientos_stock
+                                   WHERE id_pedido = :id_pedido
+                                   GROUP BY id_insumo");
+$stConsumido->execute(['id_pedido' => $idPedido]);
+$consumido = [];
+foreach ($stConsumido->fetchAll(PDO::FETCH_ASSOC) as $c) {
+    $consumido[$c['id_insumo']] = (float) $c['neto'];
+}
+
 $materiales = [];
 foreach ($filas as $f) {
     $necesario = (float) $f['necesario'];
     $stockActual = (float) $f['stock_actual'];
-    $faltante = $necesario - $stockActual;
+    $yaDescontado = $consumido[$f['id_insumo']] ?? 0;
+    $pendiente = max(0, $necesario - $yaDescontado);
+    $faltante = $pendiente - $stockActual;
 
     $materiales[] = [
         'nombre_insumo' => htmlspecialchars($f['nombre_insumo']),
         'nombre_unidad' => htmlspecialchars($f['nombre_unidad'] ?? ''),
         'necesario'     => limpiarDecimales($necesario),
+        'ya_descontado' => limpiarDecimales($yaDescontado),
         'stock_actual'  => limpiarDecimales($stockActual),
         'faltante'      => $faltante > 0 ? limpiarDecimales($faltante) : 0,
     ];
