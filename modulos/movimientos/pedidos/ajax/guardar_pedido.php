@@ -22,17 +22,6 @@ $idUsuario           = $_SESSION['id_usuario'] ?? null;
 
 // Orden de avance normal. 'cancelado' se maneja aparte (se puede llegar desde cualquiera, menos desde sí mismo).
 $ordenEstados = ['presupuestado', 'confirmado', 'en_produccion', 'listo', 'entregado'];
-// Estados en los que el pedido "compromete" stock real.
-// 'confirmado' NO descuenta: ahí solo se informan los faltantes. El stock se descuenta al pasar a producción.
-$estadosQueConsumen = ['en_produccion', 'listo', 'entregado'];
-$etiquetasEstado = [
-    'presupuestado' => 'Presupuestado',
-    'confirmado'    => 'Confirmado',
-    'en_produccion' => 'En Producción',
-    'listo'         => 'Listo',
-    'entregado'     => 'Entregado',
-    'cancelado'     => 'Cancelado',
-];
 
 $json = ['msg' => 'ERROR', 'type' => 'error', 'texto' => 'No se pudo guardar el pedido'];
 
@@ -193,125 +182,51 @@ try {
     }
 
     // =====================================================================
-    // Ajuste de stock por diferencia (solo si corresponde tocar stock)
+    // Reversión de stock SOLO al cancelar. El consumo real ahora se confirma
+    // aparte, vía confirmar_consumo_pedido.php + tabla pedido_insumo
+    // (ajax/confirmar_consumo_pedido.php) — entrar a 'en_produccion' u otro
+    // estado que no sea 'cancelado' ya NO toca el stock acá.
     // =====================================================================
-    $saltarAjusteStock = false;
+    if ($estado === 'cancelado') {
+        $saltarReversion = in_array($estadoAnterior, ['listo', 'entregado'], true) && !$reponerStock;
 
-    // Si se cancela desde 'listo' o 'entregado' y el usuario NO marcó reponer, no se toca el stock.
-    if ($estado === 'cancelado' && in_array($estadoAnterior, ['listo', 'entregado'], true) && !$reponerStock) {
-        $saltarAjusteStock = true;
-    }
+        if (!$saltarReversion) {
+            // Cuánto hay confirmado (neto) para este pedido, según movimientos_stock
+            // ya generados por confirmar_consumo_pedido.php.
+            $consumidoAnterior = [];
+            $stAnterior = $conexion->prepare("SELECT id_insumo,
+                                                      SUM(CASE WHEN tipo = 'salida' THEN cantidad ELSE -cantidad END) AS neto
+                                               FROM movimientos_stock
+                                               WHERE id_pedido = :id_pedido
+                                               GROUP BY id_insumo");
+            $stAnterior->execute(['id_pedido' => $idPedido]);
+            foreach ($stAnterior->fetchAll(PDO::FETCH_ASSOC) as $fila) {
+                $consumidoAnterior[$fila['id_insumo']] = (float) $fila['neto'];
+            }
 
-    if (!$saltarAjusteStock) {
-        // 1) Cuánto se necesita AHORA según las líneas actuales (0 si el estado no consume stock)
-        $requeridoNuevo = [];
-        if (in_array($estado, $estadosQueConsumen, true)) {
-            $stReceta = $conexion->prepare("SELECT id_insumo, cantidad_requerida FROM producto_insumo WHERE id_producto = :id_producto");
-            foreach ($lineasValidadas as $linea) {
-                $stReceta->execute(['id_producto' => $linea['id_producto']]);
-                foreach ($stReceta->fetchAll(PDO::FETCH_ASSOC) as $receta) {
-                    $idInsumo = $receta['id_insumo'];
-                    $cantidadNecesaria = $linea['cantidad'] * (float) $receta['cantidad_requerida'];
-                    $requeridoNuevo[$idInsumo] = ($requeridoNuevo[$idInsumo] ?? 0) + $cantidadNecesaria;
+            $stStockActual = $conexion->prepare("SELECT stock_actual FROM insumos WHERE id_insumo = :id FOR UPDATE");
+            $sqlMovimiento = "INSERT INTO movimientos_stock (id_insumo, id_pedido, tipo, cantidad, motivo, fecha, id_usuario, stock_anterior, stock_nuevo)
+                              VALUES (:id_insumo, :id_pedido, 'entrada', :cantidad, :motivo, NOW(), :id_usuario, :stock_anterior, :stock_nuevo)";
+            $stMovimiento = $conexion->prepare($sqlMovimiento);
+
+            foreach ($consumidoAnterior as $idInsumo => $cantidadConfirmada) {
+                if ($cantidadConfirmada <= 0.0001) {
+                    continue;
                 }
+                $stStockActual->execute(['id' => $idInsumo]);
+                $stockAnterior = (float) $stStockActual->fetchColumn();
+                $stockNuevo = $stockAnterior + $cantidadConfirmada;
+
+                $stMovimiento->execute([
+                    'id_insumo'      => $idInsumo,
+                    'id_pedido'      => $idPedido,
+                    'cantidad'       => $cantidadConfirmada,
+                    'motivo'         => "Reversión por cancelación pedido $numeroPedido",
+                    'id_usuario'     => $idUsuario,
+                    'stock_anterior' => $stockAnterior,
+                    'stock_nuevo'    => $stockNuevo
+                ]);
             }
-        }
-
-        // 2) Cuánto ya se había descontado ANTES para este mismo pedido (neto: salidas - entradas de reversión)
-        $consumidoAnterior = [];
-        $stAnterior = $conexion->prepare("SELECT id_insumo,
-                                                  SUM(CASE WHEN tipo = 'salida' THEN cantidad ELSE -cantidad END) AS neto
-                                           FROM movimientos_stock
-                                           WHERE id_pedido = :id_pedido
-                                           GROUP BY id_insumo");
-        $stAnterior->execute(['id_pedido' => $idPedido]);
-        foreach ($stAnterior->fetchAll(PDO::FETCH_ASSOC) as $fila) {
-            $consumidoAnterior[$fila['id_insumo']] = (float) $fila['neto'];
-        }
-
-        // 3) Calcular la diferencia por insumo y registrar el movimiento correspondiente
-        $todosLosInsumos = array_unique(array_merge(array_keys($requeridoNuevo), array_keys($consumidoAnterior)));
-
-        $stStockActual = $conexion->prepare("SELECT i.stock_actual, i.nombre, u.nombre AS nombre_unidad
-                                              FROM insumos i
-                                              LEFT JOIN unidades_medida u ON u.id_unidad = i.id_unidad
-                                              WHERE i.id_insumo = :id
-                                              FOR UPDATE OF i");
-        $sqlMovimiento = "INSERT INTO movimientos_stock (id_insumo, id_pedido, tipo, cantidad, motivo, fecha, id_usuario, stock_anterior, stock_nuevo)
-                          VALUES (:id_insumo, :id_pedido, :tipo, :cantidad, :motivo, NOW(), :id_usuario, :stock_anterior, :stock_nuevo)";
-        $stMovimiento = $conexion->prepare($sqlMovimiento);
-
-        $formatear = function ($valor) {
-            return rtrim(rtrim(number_format((float) $valor, 3, '.', ''), '0'), '.');
-        };
-
-        // Primero se calcula todo y se verifica que el stock alcance; recién después se registran los movimientos
-        $movimientosPendientes = [];
-        $insumosFaltantes = [];
-
-        foreach ($todosLosInsumos as $idInsumo) {
-            $nuevo = $requeridoNuevo[$idInsumo] ?? 0;
-            $anterior = $consumidoAnterior[$idInsumo] ?? 0;
-            $diferencia = round($nuevo - $anterior, 3);
-
-            if (abs($diferencia) < 0.0001) {
-                continue; // sin cambios reales para este insumo
-            }
-
-            $tipoMovimiento = $diferencia > 0 ? 'salida' : 'entrada';
-            $cantidadMovimiento = abs($diferencia);
-
-            $stStockActual->execute(['id' => $idInsumo]);
-            $insumo = $stStockActual->fetch(PDO::FETCH_ASSOC);
-            $stockAnterior = (float) $insumo['stock_actual'];
-
-            // Solo las salidas pueden dejar el stock corto: se acumulan todos los faltantes para avisar de una vez
-            if ($tipoMovimiento === 'salida' && $stockAnterior < $cantidadMovimiento) {
-                $faltante = $cantidadMovimiento - $stockAnterior;
-                $insumosFaltantes[] = $insumo['nombre'] . ' (faltan ' . $formatear($faltante) . ' ' . ($insumo['nombre_unidad'] ?? '') . ')';
-                continue;
-            }
-
-            $stockNuevo = $tipoMovimiento === 'entrada'
-                ? $stockAnterior + $cantidadMovimiento
-                : $stockAnterior - $cantidadMovimiento;
-
-            if ($estado === 'cancelado') {
-                $motivo = "Reversión por cancelación pedido $numeroPedido";
-            } elseif ($tipoMovimiento === 'entrada') {
-                $motivo = "Devolución de insumos por ajuste del pedido $numeroPedido";
-            } elseif (!in_array($estadoAnterior, $estadosQueConsumen, true)) {
-                $motivo = "Consumo pedido $numeroPedido (inicio de producción)";
-            } else {
-                $motivo = "Consumo pedido $numeroPedido (ajuste)";
-            }
-
-            $movimientosPendientes[] = [
-                'id_insumo'      => $idInsumo,
-                'id_pedido'      => $idPedido,
-                'tipo'           => $tipoMovimiento,
-                'cantidad'       => $cantidadMovimiento,
-                'motivo'         => $motivo,
-                'id_usuario'     => $idUsuario,
-                'stock_anterior' => $stockAnterior,
-                'stock_nuevo'    => $stockNuevo
-            ];
-        }
-
-        if (count($insumosFaltantes) > 0) {
-            $pasaAConsumir = in_array($estado, $estadosQueConsumen, true)
-                && !in_array($estadoAnterior, $estadosQueConsumen, true);
-
-            if ($pasaAConsumir) {
-                throw new Exception('No se puede pasar a "' . $etiquetasEstado[$estado] . '" porque faltan insumos: '
-                    . implode('; ', $insumosFaltantes) . '. Registrá la compra y volvé a intentar.');
-            }
-            throw new Exception('No hay stock suficiente para los cambios del pedido: '
-                . implode('; ', $insumosFaltantes) . '. Registrá la compra y volvé a intentar.');
-        }
-
-        foreach ($movimientosPendientes as $movimiento) {
-            $stMovimiento->execute($movimiento);
         }
     }
 
@@ -326,7 +241,7 @@ try {
     if ($e->getCode() === '23505') {
         $json = ['msg' => 'ERROR', 'type' => 'error', 'texto' => 'Ya existe un pedido con ese número.'];
     } elseif ($e->getCode() === '23514') {
-        $json = ['msg' => 'ERROR', 'type' => 'error', 'texto' => 'Los datos no cumplen las validaciones de la base (revisá seña, total, estado o stock).'];
+        $json = ['msg' => 'ERROR', 'type' => 'error', 'texto' => 'Los datos no cumplen las validaciones de la base (revisá seña, total o estado).'];
     } else {
         $json = ['msg' => 'ERROR', 'type' => 'error', 'texto' => 'Ocurrió un error al guardar el pedido.'];
     }

@@ -103,7 +103,7 @@ $(document).ready(function () {
 
   // ====== Restricciones de estado al editar (solo avanzar, o cancelar) ======
   const ORDEN_ESTADOS = ["presupuestado", "confirmado", "en_produccion", "listo", "entregado"];
-  // 'confirmado' no descuenta stock: el descuento ocurre al pasar a producción
+  // Estados donde puede existir consumo real confirmado (pedido_insumo) que haya que revertir al cancelar.
   const ESTADOS_QUE_CONSUMEN = ["en_produccion", "listo", "entregado"];
 
   if (ES_EDICION && ESTADO_ANTERIOR) {
@@ -135,7 +135,7 @@ $(document).ready(function () {
       ESTADOS_QUE_CONSUMEN.indexOf(ESTADO_ANTERIOR) !== -1;
 
     if (aplica) {
-      // Por defecto se repone si venía de en_produccion; NO si venía de listo/entregado
+      // Por defecto se repone si venía de en_produccion (recién empezando); NO si venía de listo/entregado
       var reponerPorDefecto = ESTADO_ANTERIOR === "en_produccion";
       if ($("#bloque_reponer_stock").is(":hidden")) {
         $("#check_reponer_stock").prop("checked", reponerPorDefecto);
@@ -182,7 +182,7 @@ $(document).ready(function () {
     });
   });
 
-  // ====== Cargar el panel de materiales necesarios (solo en edición) ======
+  // ====== Cargar el panel de materiales (solo en edición) ======
   function cargarMaterialesNecesarios() {
     if (!ES_EDICION) {
       return;
@@ -194,16 +194,34 @@ $(document).ready(function () {
       dataType: "json",
       success: function (res) {
         var $body = $("#materiales_necesarios_body").empty();
+        var puedeConfirmar = !!res.puede_confirmar;
+        var colspan = puedeConfirmar ? 7 : 6;
+
+        $("#col_utilizado").toggle(puedeConfirmar);
+        $("#btnConfirmarConsumo").toggle(puedeConfirmar);
+        $("#texto_ayuda_materiales").text(
+          puedeConfirmar
+            ? 'Corregí la columna "Utilizado" si el consumo real fue distinto al estimado, y confirmá para descontar el stock de verdad.'
+            : "Según la receta de cada producto (producto_insumo) y las líneas ya guardadas. Todavía no descuenta stock: eso se confirma recién en producción."
+        );
+
         if (!res.materiales || res.materiales.length === 0) {
-          $body.append('<tr><td colspan="6" class="text-center text-muted">Los productos de este pedido no tienen insumos cargados en su receta (producto_insumo)</td></tr>');
+          $body.append('<tr><td colspan="' + colspan + '" class="text-center text-muted">Los productos de este pedido no tienen insumos cargados en su receta (producto_insumo)</td></tr>');
           return;
         }
+
         var hayFaltantes = false;
         res.materiales.forEach(function (m) {
           if (m.faltante > 0) {
             hayFaltantes = true;
           }
-          var claseFila = m.faltante > 0 ? "table-danger" : "";
+          var claseFila = m.faltante > 0 && !puedeConfirmar ? "table-danger" : "";
+          var celdaUtilizado = "";
+          if (puedeConfirmar) {
+            celdaUtilizado =
+              "<td><input type='number' step='0.001' min='0.001' class='form-control form-control-sm input-utilizado' " +
+              "data-id-insumo='" + m.id_insumo + "' value='" + m.utilizado + "'></td>";
+          }
           $body.append(
             "<tr class='" + claseFila + "'>" +
               "<td>" + m.nombre_insumo + "</td>" +
@@ -212,21 +230,93 @@ $(document).ready(function () {
               "<td>" + m.ya_descontado + "</td>" +
               "<td>" + m.stock_actual + "</td>" +
               "<td>" + (m.faltante > 0 ? m.faltante : "-") + "</td>" +
+              celdaUtilizado +
               "</tr>"
           );
         });
 
-        // Antes de producción: avisar si faltan insumos (el guardado va a bloquear el avance)
-        if (hayFaltantes && (ESTADO_ANTERIOR === "presupuestado" || ESTADO_ANTERIOR === "confirmado")) {
+        // Antes de producción: avisar si faltan insumos (informativo; el bloqueo real ocurre al confirmar consumo)
+        if (hayFaltantes && !puedeConfirmar && (ESTADO_ANTERIOR === "presupuestado" || ESTADO_ANTERIOR === "confirmado")) {
           $("#aviso_faltantes").show();
         }
       },
       error: function () {
-        $("#materiales_necesarios_body").html('<tr><td colspan="6" class="text-center text-danger">Error al calcular los materiales necesarios</td></tr>');
+        $("#materiales_necesarios_body").html('<tr><td colspan="7" class="text-center text-danger">Error al calcular los materiales</td></tr>');
       },
     });
   }
   cargarMaterialesNecesarios();
+
+  // ====== Confirmar el consumo real (recién acá se toca el stock) ======
+  $("#btnConfirmarConsumo").on("click", function () {
+    var consumos = [];
+    var huboError = false;
+
+    $("#materiales_necesarios_body .input-utilizado").each(function () {
+      var idInsumo = $(this).data("id-insumo");
+      var cantidad = parseFloat($(this).val());
+      if (!cantidad || cantidad <= 0) {
+        huboError = true;
+        return;
+      }
+      consumos.push({ id_insumo: idInsumo, cantidad_utilizada: cantidad });
+    });
+
+    if (huboError || consumos.length === 0) {
+      PNotify.notice({
+        title: "Error",
+        text: "Todas las cantidades utilizadas deben ser mayores a cero",
+        type: "error",
+        delay: DELAY_NOTIFICACION,
+        styling: "brighttheme",
+      });
+      return;
+    }
+
+    var $btn = $(this);
+    $btn.prop("disabled", true);
+
+    $.ajax({
+      url: "ajax/confirmar_consumo_pedido.php",
+      type: "POST",
+      data: {
+        id_pedido: ID_PEDIDO,
+        consumos: JSON.stringify(consumos),
+      },
+      dataType: "json",
+      success: function (res) {
+        $btn.prop("disabled", false);
+        if (res.msg === "CORRECTO") {
+          PNotify.notice({
+            title: "Éxito",
+            text: res.texto,
+            type: "success",
+            delay: DELAY_NOTIFICACION,
+            styling: "brighttheme",
+          });
+          cargarMaterialesNecesarios();
+        } else {
+          PNotify.notice({
+            title: "Error",
+            text: res.texto,
+            type: "error",
+            delay: DELAY_NOTIFICACION,
+            styling: "brighttheme",
+          });
+        }
+      },
+      error: function () {
+        $btn.prop("disabled", false);
+        PNotify.notice({
+          title: "Error",
+          text: "Error al confirmar el consumo",
+          type: "error",
+          delay: DELAY_NOTIFICACION,
+          styling: "brighttheme",
+        });
+      },
+    });
+  });
 
   // ====== Guardar el pedido ======
   $("#form_pedido").on("submit", function (e) {

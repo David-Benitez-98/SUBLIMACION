@@ -98,7 +98,7 @@ $productosDisponibles = $stProducto->fetchAll(PDO::FETCH_ASSOC);
                             <div class="col-md-3 mb-3">
                                 <label class="form-label">Fecha de Pedido *</label>
                                 <input type="date" class="form-control" name="fecha_pedido" id="input_fecha_pedido"
-                                       value="<?php echo $esEdicion ? $pedido['fecha_pedido'] : ''; ?>" required>
+                                    value="<?php echo $esEdicion ? $pedido['fecha_pedido'] : ''; ?>" required>
                             </div>
                             <div class="col-md-4 mb-3">
                                 <label class="form-label">Estado</label>
@@ -134,23 +134,23 @@ $productosDisponibles = $stProducto->fetchAll(PDO::FETCH_ASSOC);
                         </div>
                         <div id="aviso_faltantes" class="alert alert-danger" style="display:none;">
                             <i class="fas fa-exclamation-triangle"></i>
-                            Hay insumos faltantes (ver <strong>Materiales Necesarios</strong> más abajo). No se puede pasar a <strong>En Producción</strong> hasta registrar la compra.
+                            Hay insumos faltantes (ver <strong>Materiales del Pedido</strong> más abajo). Al confirmar el consumo en producción, si no alcanza el stock, el sistema lo va a bloquear.
                         </div>
                         <div class="row">
                             <div class="col-md-3 mb-3">
                                 <label class="form-label">Entrega Estimada</label>
                                 <input type="date" class="form-control" name="fecha_entrega_estimada"
-                                       value="<?php echo $esEdicion ? $pedido['fecha_entrega_estimada'] : ''; ?>">
+                                    value="<?php echo $esEdicion ? $pedido['fecha_entrega_estimada'] : ''; ?>">
                             </div>
                             <div class="col-md-3 mb-3">
                                 <label class="form-label">Entrega Real</label>
                                 <input type="date" class="form-control" name="fecha_entrega_real" id="input_fecha_entrega_real"
-                                       value="<?php echo $esEdicion ? $pedido['fecha_entrega_real'] : ''; ?>">
+                                    value="<?php echo $esEdicion ? $pedido['fecha_entrega_real'] : ''; ?>">
                             </div>
                             <div class="col-md-3 mb-3">
                                 <label class="form-label">Seña Pagada</label>
                                 <input type="number" step="0.01" min="0" class="form-control" name="sena_pagada" id="input_sena_pagada"
-                                       value="<?php echo $esEdicion ? (float) $pedido['sena_pagada'] : 0; ?>">
+                                    value="<?php echo $esEdicion ? (float) $pedido['sena_pagada'] : 0; ?>">
                             </div>
                             <div class="col-md-3 mb-3">
                                 <label class="form-label">Saldo</label>
@@ -211,8 +211,7 @@ $productosDisponibles = $stProducto->fetchAll(PDO::FETCH_ASSOC);
                         <div class="mt-4">
                             <a href="pedidos.php" class="btn btn-secondary">Volver</a>
                             <?php if ($esEdicion): ?>
-                                <a href="<?php echo BASE_URL; ?>/reportes/pedidos/imprimir_pedido.php?id_pedido=<?php echo $idPedido; ?>" target="_blank" class="btn btn-outline-dark">
-                                    <i class="fas fa-print"></i> Imprimir
+                                <a href="<?php echo BASE_URL; ?>/reportes/pedidos/imprimir_pedido.php?id_pedido=<?php echo $idPedido; ?>" target="_blank" class="btn btn-outline-dark"> <i class="fas fa-print"></i> Imprimir
                                 </a>
                             <?php endif; ?>
                             <button type="submit" class="btn btn-primary" id="btnGuardarPedido">
@@ -223,8 +222,8 @@ $productosDisponibles = $stProducto->fetchAll(PDO::FETCH_ASSOC);
 
                     <?php if ($esEdicion): ?>
                         <hr class="mt-4">
-                        <h6><i class="fas fa-boxes"></i> Materiales Necesarios</h6>
-                        <p class="text-muted small">Según la receta de cada producto (producto_insumo) y las líneas <strong>ya guardadas</strong>. El stock se descuenta recién al pasar a En Producción; en Confirmado es solo informativo.</p>
+                        <h6><i class="fas fa-boxes"></i> Materiales del Pedido</h6>
+                        <p class="text-muted small" id="texto_ayuda_materiales">Según la receta de cada producto (producto_insumo) y las líneas ya guardadas.</p>
                         <table class="table table-sm" id="tbl_materiales_necesarios">
                             <thead>
                                 <tr>
@@ -234,12 +233,18 @@ $productosDisponibles = $stProducto->fetchAll(PDO::FETCH_ASSOC);
                                     <th>Ya descontado</th>
                                     <th>Stock Actual</th>
                                     <th>Faltante</th>
+                                    <th id="col_utilizado" style="display:none;">Utilizado</th>
                                 </tr>
                             </thead>
                             <tbody id="materiales_necesarios_body">
-                                <tr><td colspan="6" class="text-center text-muted">Cargando...</td></tr>
+                                <tr>
+                                    <td colspan="7" class="text-center text-muted">Cargando...</td>
+                                </tr>
                             </tbody>
                         </table>
+                        <button type="button" class="btn btn-success btn-sm" id="btnConfirmarConsumo" style="display:none;">
+                            <i class="fas fa-check-double"></i> Confirmar consumo
+                        </button>
                     <?php endif; ?>
                 </div>
             </div>
