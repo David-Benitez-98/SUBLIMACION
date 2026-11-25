@@ -37,15 +37,26 @@ try {
 
     // Mismo patrón que guardar_compra.php: se registra el movimiento y el trigger
     // actualiza insumos.stock_actual solo. Acá el tipo es 'salida' para revertir la entrada.
-    $stStockActual = $conexion->prepare("SELECT stock_actual FROM insumos WHERE id_insumo = :id FOR UPDATE");
+    $stStockActual = $conexion->prepare("SELECT nombre, stock_actual FROM insumos WHERE id_insumo = :id FOR UPDATE");
     $sqlMovimiento = "INSERT INTO movimientos_stock (id_insumo, id_compra, tipo, cantidad, motivo, fecha, id_usuario, stock_anterior, stock_nuevo)
                       VALUES (:id_insumo, :id_compra, 'salida', :cantidad, :motivo, NOW(), :id_usuario, :stock_anterior, :stock_nuevo)";
     $stMovimiento = $conexion->prepare($sqlMovimiento);
 
     foreach ($lineas as $linea) {
         $stStockActual->execute(['id' => $linea['id_insumo']]);
-        $stockAnterior = (float) $stStockActual->fetchColumn();
-        $stockNuevo = $stockAnterior - (float) $linea['cantidad'];
+        $insumo = $stStockActual->fetch(PDO::FETCH_ASSOC);
+        $stockAnterior = (float) $insumo['stock_actual'];
+        $stockNuevo = round($stockAnterior - (float) $linea['cantidad'], 3);
+
+        // No se puede revertir una entrada si parte de esa mercadería ya se utilizó
+        if ($stockNuevo < 0) {
+            throw new Exception(
+                'No se puede anular la compra ' . $compra['numero_compra'] . ': el insumo "' . $insumo['nombre'] .
+                '" tiene stock ' . number_format($stockAnterior, 3, ',', '.') .
+                ' y la compra ingresó ' . number_format((float) $linea['cantidad'], 3, ',', '.') .
+                ', por lo que ya se utilizó parte de lo ingresado.'
+            );
+        }
 
         $stMovimiento->execute([
             'id_insumo'      => $linea['id_insumo'],

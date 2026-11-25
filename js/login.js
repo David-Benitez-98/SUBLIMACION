@@ -9,6 +9,13 @@ $(document).ready(function () {
   $("body").loadingModal();
   $("body").loadingModal("hide");
 
+  // Si llegó acá porque se cerró la sesión por inactividad, se lo avisamos
+  if (new URLSearchParams(window.location.search).get("expirada") === "1") {
+    $("#mensaje").html(
+      '<div class="alert alert-warning"><strong>Sesión expirada.</strong> Por inactividad se cerró su sesión. Vuelva a iniciar sesión.</div>',
+    );
+  }
+
   window.addEventListener("pageshow", function (event) {
     if (event.persisted) {
       // La página volvió desde el caché del navegador (botón "Atrás")
@@ -44,7 +51,8 @@ $(document).ready(function () {
                 "</div>",
             );
             window.setTimeout(function () {
-              location.href = "portada/portada.php";
+              // Si venía de otra página (sesión expirada), vuelve ahí; si no, a la portada
+              location.href = response.destino || "portada/portada.php";
             }, 1000);
             break;
           case "ENVIADO":

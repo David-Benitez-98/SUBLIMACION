@@ -10,3 +10,25 @@
 <script src="<?php echo BASE_URL; ?>/lib_fontawesome/js/all.js"></script>
 <script src="<?php echo BASE_URL; ?>/js/jquery.loadingModal.min.js"></script>
 <script src="<?php echo BASE_URL; ?>/js/comun.js"></script>
+<script>
+    // Sesión expirada: si cualquier llamada AJAX responde 401, volvemos al login.
+    // El servidor ya guardó la página actual para volver a ella después de loguearse.
+    (function () {
+        var urlLogin = '<?php echo BASE_URL; ?>/index.php?expirada=1';
+
+        $(document).ajaxError(function (event, jqxhr) {
+            if (jqxhr.status === 401) {
+                window.location.href = urlLogin;
+            }
+        });
+
+        // DataTables muestra su propio cartel "Ajax error" antes del handler global.
+        // Al devolver true le indicamos que el error ya fue manejado (evita el cartel).
+        $(document).on('xhr.dt', function (e, settings, json, xhr) {
+            if (xhr && xhr.status === 401) {
+                window.location.href = urlLogin;
+                return true;
+            }
+        });
+    })();
+</script>

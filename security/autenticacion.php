@@ -2,7 +2,7 @@
 /**
  * Endpoint de autenticación
  * Recibe por POST: usuario, password
- * Responde JSON: { msg, type, texto }
+ * Responde JSON: { msg, type, texto, destino }
  */
 
 ini_set('display_errors', 1);
@@ -13,6 +13,7 @@ session_start();
 header('Content-Type: application/json; charset=utf-8');
 
 require_once dirname(__DIR__) . '/config/conexion.php';
+require_once dirname(__DIR__) . '/config/constantes.php';
 
 // ---------------------------------------------------------------------
 // Configuración del bloqueo por intentos fallidos
@@ -100,14 +101,38 @@ try {
     $stR = $conexion->prepare($sqlReset);
     $stR->execute(['id' => $usuarioRow['id_usuario']]);
 
-    $_SESSION['autenticado']  = true;
-    $_SESSION['id_usuario']   = $usuarioRow['id_usuario'];
-    $_SESSION['nombre']       = $usuarioRow['nombre'];
-    $_SESSION['email']        = $usuarioRow['email'];
-    $_SESSION['usuario_nick'] = $usuarioRow['usuario_nick'];
-    $_SESSION['rol']          = $usuarioRow['rol'];
+    $_SESSION['autenticado']      = true;
+    $_SESSION['id_usuario']       = $usuarioRow['id_usuario'];
+    $_SESSION['nombre']           = $usuarioRow['nombre'];
+    $_SESSION['email']            = $usuarioRow['email'];
+    $_SESSION['usuario_nick']     = $usuarioRow['usuario_nick'];
+    $_SESSION['rol']              = $usuarioRow['rol'];
+    $_SESSION['ultima_actividad'] = time();
 
-    $json = ['msg' => 'CORRECTO', 'type' => 'success', 'texto' => 'Redirigiendo...'];
+    // -------------------------------------------------------------
+    // 6. Página a la que quería ir antes de que se cerrara la sesión
+    //    Se valida para evitar redirecciones a sitios externos.
+    // -------------------------------------------------------------
+    $destino = $_SESSION['url_destino'] ?? null;
+    unset($_SESSION['url_destino']);
+
+    $destinoValido = null;
+    if (is_string($destino)
+        && strpos($destino, BASE_URL . '/') === 0                    // dentro del sistema
+        && strpos($destino, '//') !== 0                              // no protocolo-relativo
+        && !preg_match('/[\r\n\\\\]/', $destino)                     // sin saltos de línea ni \
+        && strpos($destino, BASE_URL . '/index.php') !== 0           // no el propio login
+        && strpos($destino, BASE_URL . '/security/') !== 0           // no endpoints de seguridad
+    ) {
+        $destinoValido = $destino;
+    }
+
+    $json = [
+        'msg'     => 'CORRECTO',
+        'type'    => 'success',
+        'texto'   => 'Redirigiendo...',
+        'destino' => $destinoValido
+    ];
 
 } catch (Exception $e) {
     $json = ['msg' => 'DENEGADO', 'type' => 'error', 'texto' => $e->getMessage()];

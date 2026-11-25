@@ -1,3 +1,42 @@
-/uploads/
+# Local configuration and secrets
 /config/conexion.php
+.env
+.env.*
+!.env.example
+
+# User uploads and local data
+/uploads/
+/storage/
+/logs/
 *.log
+
+# Backups and database dumps
+/backups/
+/database/backups/
+*.dump
+*.backup
+*.bak
+*.old
+*.sql.gz
+*_data.sql
+*-data.sql
+
+# Generated dependencies
+/vendor/
+/node_modules/
+
+# Operating system and editors
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
+
+# Temporary files
+*.swp
+*.swo
+
+# Local database backups with real records
+/estructura.sql
+*_full.sql
+*_backup.sql
